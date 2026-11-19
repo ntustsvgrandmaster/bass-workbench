@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs><linearGradient id="tile" x2="0" y2="1"><stop stop-color="#0E1A22"/><stop offset="1" stop-color="#2A3C48"/></linearGradient></defs>
+  <rect id="base" x="40" y="40" width="944" height="944" rx="224" fill="url(#tile)"/>
+  <g fill="none" stroke="#70E8BF" stroke-linecap="round">
+  <g id="resting-strings">
+    <path d="M226 292L798 339" stroke-width="40" opacity="0.59"/>
+    <path d="M226 557L798 545" stroke-width="62" opacity="0.73"/>
+    <path d="M226 696L798 653" stroke-width="84" opacity="0.84"/>
+  </g>
+  <g id="sounding-string">
+    <path d="M226 435 L268 436 C323 437.3 327 294 386 294 C461 294 505 691 591 691 C664 691 671 441 743 443 L798 444.53" stroke-width="66" opacity="1"/>
+  </g>
+  </g>
+</svg>

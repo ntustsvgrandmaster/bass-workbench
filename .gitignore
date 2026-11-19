@@ -1,0 +1,72 @@
+# macOS / editor temporary files
+.DS_Store
+._*
+*~
+*.swp
+*.swo
+*.xcuserstate
+xcuserdata/
+
+# Python environments, compiled modules and analysis/test caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.numba_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Swift / Xcode and local build/test output
+.build/
+.swiftpm/
+.module-cache/
+.test-work/
+DerivedData/
+build/
+dist/
+*.app/
+*.dSYM/
+*.dmg
+*.pkg
+*.zip
+native-tests
+*.log
+
+# Private song projects and media (including files imported outside projects/)
+/projects/
+*.basswork/
+*.basswork.json
+*.wav
+*.m4a
+*.flac
+*.mp3
+*.aac
+*.aif
+*.aiff
+*.alac
+*.ogg
+*.mp4
+*.mscz
+*.mscx
+*.musicxml
+*.mxl
+*.mid
+*.midi
+*.capobundle/
+
+# Local secrets; examples may be committed
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Optional local model runtimes and weights (installed separately)
+.local-models/

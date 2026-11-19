@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:">
+<style>
+html,body{margin:0;background:#101820;color:#b6c6cc;font:12px -apple-system,sans-serif}
+#paper{position:relative;background:#fff;min-height:180px;border-radius:8px;overflow-x:auto;overflow-y:hidden}
+#score{padding:6px 6px 12px}
+#hotspots{position:absolute;inset:0;pointer-events:none}
+#hotspots button{position:absolute;background:transparent;border:0;pointer-events:auto;border-radius:4px}
+#hotspots button:enabled{cursor:pointer}
+#hotspots button:enabled:not(.selected):hover{background:#69dbb52b}
+#hotspots button:enabled:active{background:#69dbb548}
+#hotspots button[data-underline].in-loop::after,#hotspots button[data-underline].selected::after{
+ content:'';position:absolute;top:var(--staff-underline);left:0;right:0;height:3px;
+ background:#55a68e;pointer-events:none
+}
+#hotspots button[data-underline].selected::after{height:4px;background:#24674f;border-radius:2px}
+#hotspots button.loop-start::after{border-top-left-radius:2px;border-bottom-left-radius:2px}
+#hotspots button.loop-end::after{border-top-right-radius:2px;border-bottom-right-radius:2px}
+#hotspots button:disabled{cursor:default}
+#hotspots button[data-underline].selected:disabled::after{background:#7b827e}
+#hotspots button:enabled:focus-visible,#hotspots button:enabled.retained-focus{outline:2px solid #193f31;outline-offset:-3px;box-shadow:inset 0 0 0 5px white}
+#message{padding:12px;line-height:1.6}#paper.hidden{display:none}
+</style><script src="osmd.min.js"></script></head><body>
+<div id="message">匯入 MSCZ／MusicXML，完整五線譜與 TAB 會顯示於此。</div>
+<div id="paper" class="hidden"><div id="score"></div><div id="hotspots"></div></div>
+<script>
+// pending 只保留最新顯示要求：非同步載入期間快速切小節，不需逐一重畫所有過渡畫面。
+let osmd=null,xmlRevision='',selected=0,loading=false,pending=null;
+let measureCount=0,previewState=null,layoutKey='',layoutCount=0;
+let interactionEnabled=true;
+let loopContext='';
+let loopFirst=null,loopLast=null;
+function markLoop(button){
+ const index=Number(button.dataset.measure);
+ button.classList.toggle('in-loop',loopFirst!==null&&index>=loopFirst&&index<=loopLast);
+ button.classList.toggle('loop-start',index===loopFirst);
+ button.classList.toggle('loop-end',index===loopLast);
+}
+function setScoreLoopRange(first,last){
+ loopFirst=first;loopLast=last;
+ document.querySelectorAll('#hotspots button').forEach(markLoop);
+}
+function setScoreInteractionEnabled(enabled){
+ interactionEnabled=enabled;
+ for(const button of document.querySelectorAll('#hotspots button'))button.disabled=!enabled;
+}
+function tell(data){window.webkit?.messageHandlers?.score?.postMessage(data)}
+function showMessage(text){const message=document.getElementById('message');message.textContent=text;message.hidden=false;}
+// 只保留一個 OSMD，換譜／回無譜時清掉舊 SVG 與索引參照。
+function releaseScore(){
+ if(osmd)osmd.clear();osmd=null;xmlRevision='';
+ previewState=null;layoutKey='';layoutCount=0;measureCount=0;
+ document.getElementById('score').replaceChildren();
+ document.getElementById('hotspots').replaceChildren();
+ document.getElementById('paper').classList.add('hidden');
+}
+async function loadScore(payload){
+ // 載入期間的選取更新不能蓋掉同一份待載入 XML。
+ pending=pending&&pending.revision===payload.revision?{...pending,...payload}:payload;
+ if(loading)return;loading=true;
+ try{
+  while(pending){const p=pending;pending=null;
+   try{
+    if(p.xml===null){releaseScore();showMessage('匯入 MSCZ／MusicXML，完整五線譜與 TAB 會顯示於此。');continue;}
+    loopContext=p.loopContext??'';
+    selected=p.selected;
+    if(p.revision!==xmlRevision){
+     if(typeof p.xml!=='string')throw new Error('未收到完整樂譜');
+     releaseScore();
+     osmd=new opensheetmusicdisplay.OpenSheetMusicDisplay('score',{autoResize:false,backend:'svg',drawingParameters:'compacttight',drawTitle:false,drawSubtitle:false,drawComposer:false,drawLyricist:false,drawPartNames:true,autoGenerateMultipleRestMeasuresFromRestMeasures:false,renderSingleHorizontalStaffline:true,stretchLastSystemLine:false,newSystemFromXML:false,newSystemFromNewPageInXML:false,newPageFromXML:false});
+     osmd.EngravingRules.RenderMultipleRestMeasures=false;
+     const xml=new DOMParser().parseFromString(p.xml,'application/xml');
+     if(xml.querySelector('parsererror'))throw new Error('MusicXML 格式無法讀取');
+     // Preview keeps individual bar indices, including explicitly grouped rests.
+     for(const group of xml.querySelectorAll('measure-style > multiple-rest'))group.remove();
+     await osmd.load(xml);xmlRevision=p.revision;
+    }
+    if(pending)continue;
+    measureCount=Math.min(osmd.Sheet.SourceMeasures.length,p.measureCount??osmd.Sheet.SourceMeasures.length);
+    renderPreview();
+   }catch(e){releaseScore();if(!pending){showMessage('樂譜顯示失敗：'+e.message+'。原始檔仍保存在專案內，可用 MuseScore 開啟。');tell({type:'error',message:e.message});}}
+  }
+ }finally{loading=false}
+}
+// 固定字級、單行自然排版；以實際小節右界決定可放的完整前綴。
+// 只重排有限的候選範圍，不以視窗寬度猜固定小節數，也不畫整首歌。
+function renderRange(first,last){
+ const rules=osmd.EngravingRules;
+ // 用實際索引，避免弱起小節的印刷編號／OSMD 的 implicit 特例造成偏一小節。
+ rules.MinMeasureToDrawNumber=0;rules.MaxMeasureToDrawNumber=0;
+ rules.MinMeasureToDrawIndex=first;rules.MaxMeasureToDrawIndex=last;
+ osmd.render();
+}
+function rightEdge(index){
+ const measures=osmd.GraphicSheet.MeasureList[index]||[];
+ const edges=measures.map(m=>m?.PositionAndShape).filter(Boolean)
+  .map(box=>(box.AbsolutePosition.x+box.Size.width)*10*(osmd.Zoom||1)).filter(Number.isFinite);
+ if(!edges.length)throw new Error('無法取得第 '+(index+1)+' 小節的版面');
+ return Math.max(...edges)+(osmd.EngravingRules.PageRightMargin||0)*10*(osmd.Zoom||1);
+}
+function renderPreview(){
+ if(!osmd||measureCount<1)return;
+ document.getElementById('message').hidden=true;
+ const paper=document.getElementById('paper');paper.classList.remove('hidden');
+ const width=Math.floor(paper.clientWidth-12); // score 左右各 6px padding
+ if(width<=0)return;
+ selected=Math.max(0,Math.min(measureCount-1,selected));
+ const key=JSON.stringify([xmlRevision,loopContext,selected,width]);
+ if(layoutKey===key)return;
+ const started=performance.now(),first=Math.max(0,selected-1);
+ const seed=previewState?previewState.last-previewState.first+2:Math.max(2,Math.ceil(width/100));
+ let last=Math.min(measureCount-1,Math.max(selected,first+seed-1)),passes=0;
+ while(true){
+  renderRange(first,last);passes++;
+  let fitted=first-1;
+  for(let i=first;i<=last;i++){if(rightEdge(i)<=width-1)fitted=i;else break;}
+  if(fitted<last||last===measureCount-1){
+   const finalLast=Math.max(selected,fitted);
+   if(finalLast!==last){last=finalLast;renderRange(first,last);passes++;}
+   break;
+  }
+  last=Math.min(measureCount-1,first+(last-first+1)*2-1);
+ }
+ layoutKey=key;layoutCount++;
+ previewState={revision:xmlRevision,current:selected,first,last,width,usedWidth:rightEdge(last),
+  overflow:rightEdge(last)>width,passes,layoutCount,elapsedMs:performance.now()-started};
+ drawTabRests();
+ buildHotspots();
+ // 極密的小節使「前一＋當前」也放不下時保留字級，允許水平查看，先顯示當前小節。
+ paper.scrollLeft=0;
+ if(previewState.overflow){
+  const current=document.querySelector('#hotspots button.selected');
+  if(current)paper.scrollLeft=Math.max(0,current.offsetLeft+current.offsetWidth-paper.clientWidth+6);
+ }
+ tell({type:'ready',revision:xmlRevision});
+}
+// VexFlow TAB uses invisible ghost notes for spacing. Draw only printable rests at
+// their existing positions so the score, horizontal scroll, and hit regions agree.
+function drawTabRests(){
+ const converter=opensheetmusicdisplay.VexFlowConverter;
+ for(let i=previewState.first;i<=previewState.last;i++){
+  for(const measure of osmd.GraphicSheet.MeasureList[i]||[]){
+   if(!measure?.isTabMeasure)continue;
+   for(const entry of measure.staffEntries){
+    for(const voice of entry.graphicalVoiceEntries){
+     const note=voice.notes[0]?.sourceNote,ghost=voice.vfStaveNote;
+     const context=ghost?.getContext();
+     if(!note?.isRest()||note.PrintObject===false||!ghost?.getTickContext()||!context)continue;
+     // Reuse the same vector glyph as notation without replacing TAB's layout note.
+     const copy=Object.create(voice);
+     copy.notes=voice.notes.map(note=>Object.create(note));
+     const rest=converter.StaveNote(copy),head=rest.note_heads[0];
+     const whole=note.IsWholeMeasureRest||note.Length.Equals(measure.parentSourceMeasure.Duration);
+     const x=whole?(measure.stave.getNoteStartX()+measure.stave.getNoteEndX())/2:ghost.getAbsoluteX();
+     const voiceIndex=note.ParentStaff.Voices.indexOf(voice.parentVoiceEntry.ParentVoice);
+     const lastLine=Math.max(0,measure.ParentStaff.StafflineCount-1);
+     const lane=lastLine/2+(voiceIndex>0?0.7:0);
+     const y=measure.stave.getYForLine(Math.min(lastLine,lane));
+     const width=head.getWidth();
+     const group=context.openGroup('tab-rest');
+     group.setAttribute('pointer-events','none');
+     head.setX(x-width/2).setY(y).setContext(context).draw();
+     for(let dot=0;dot<rest.addDotsCount;dot++){
+      context.beginPath();
+      context.arc(x+width/2+3+dot*4,y,1.2,0,2*Math.PI,false);
+      context.fill();
+     }
+     context.closeGroup();
+    }
+   }
+  }
+ }
+}
+// GraphicSheet 尺寸使用 OSMD 單位；乘 10 × Zoom，並加上 SVG 在 paper 內的實際起點。
+function buildHotspots(){
+ const layer=document.getElementById('hotspots');
+ const active=layer.contains(document.activeElement)?document.activeElement:null;
+ const focused=active?.dataset.measure;
+ const keyboardFocused=active?.matches(':focus-visible,.retained-focus');
+ layer.replaceChildren();
+ if(!previewState)return;
+ const revision=xmlRevision,context=loopContext,anchor=selected;
+ const list=osmd.GraphicSheet?.MeasureList||[];
+ const paper=document.getElementById('paper'),svg=document.querySelector('#score svg');
+ const paperBox=paper.getBoundingClientRect(),svgBox=svg?.getBoundingClientRect();
+ const left=svgBox?svgBox.left-paperBox.left+paper.scrollLeft:6;
+ const top=svgBox?svgBox.top-paperBox.top+paper.scrollTop:6;
+ const notationBox=svg?.getBBox();
+ const notationBottom=notationBox?notationBox.y+notationBox.height:0;
+ for(let i=previewState.first;i<=previewState.last;i++){
+  const drawn=list[i]||[];
+  const staffBottom=measure=>measure?.stave?.getYForLine(measure.stave.getNumLines()-1);
+  const bottom=Math.max(...drawn.map(staffBottom).filter(Number.isFinite));
+  for(const measure of drawn){
+   const box=measure?.PositionAndShape;if(!box)continue;
+   const x=box.AbsolutePosition?.x,y=box.AbsolutePosition?.y,w=box.Size?.width;
+   if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(w)||w<=0)continue;
+   const button=document.createElement('button');button.className=i===selected?'selected':'';
+   button.disabled=!interactionEnabled;
+   button.dataset.measure=i;
+   markLoop(button);
+   if(i===selected)button.setAttribute('aria-current','true');
+   button.setAttribute('aria-label','第 '+(i+1)+' 小節');
+   const scale=10*(osmd.Zoom||1);
+   const hitTop=Math.max(0,top+y*scale-12);
+   Object.assign(button.style,{left:(left+x*scale)+'px',top:hitTop+'px',width:(w*scale)+'px',height:Math.max(56,(box.Size?.height||6)*scale+24)+'px'});
+   if(Number.isFinite(bottom)&&staffBottom(measure)===bottom){
+    button.dataset.underline='';
+    button.style.setProperty('--staff-underline',(top+Math.max(bottom,notationBottom)*(osmd.Zoom||1)+6-hitTop)+'px');
+   }
+   button.onclick=event=>{
+    if(event.detail>0&&event.shiftKey){
+     if(interactionEnabled&&button.isConnected)tell({type:'measure-loop',index:i,other:anchor,revision,loopContext:context});
+    }else{
+     tell({type:'measure',index:i,revision});
+    }
+   };
+   layer.append(button);
+  }
+ }
+ if(focused!==undefined&&interactionEnabled){
+  const next=[...layer.querySelectorAll('button')].find(button=>button.dataset.measure===focused)
+    ??layer.querySelector('button.selected');
+  next?.focus({preventScroll:true});
+  if(keyboardFocused&&next===document.activeElement){
+   next.classList.add('retained-focus');
+   next.addEventListener('blur',()=>next.classList.remove('retained-focus'),{once:true});
+  }
+ }
+}
+let resizeTimer,lastObservedWidth=0;
+function scheduleLayout(){
+ clearTimeout(resizeTimer);
+ resizeTimer=setTimeout(()=>{if(osmd&&!loading){try{renderPreview()}catch(e){showMessage('樂譜預覽排版失敗：'+e.message)}}},100);
+}
+window.addEventListener('resize',scheduleLayout);
+new ResizeObserver(entries=>{
+ const width=Math.floor(entries[0].contentRect.width);
+ if(width!==lastObservedWidth){lastObservedWidth=width;scheduleLayout();}
+}).observe(document.getElementById('paper'));
+</script></body></html>

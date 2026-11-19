@@ -1,0 +1,7 @@
+{
+  "name": "opensheetmusicdisplay",
+  "version": "2.2.1",
+  "registry": "https://registry.npmjs.org",
+  "integrity": "sha512-2DqI2lQKKzDDoIe7yD8yNyWTofSdRbFZYTD3nGRzEo1XmTK2DJWcUXLRXZ2E5xzOt7Pd+RmSGL1quFQZRCqDMw==",
+  "license": "BSD-3-Clause"
+}

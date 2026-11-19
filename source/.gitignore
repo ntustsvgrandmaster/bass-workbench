@@ -1,0 +1,13 @@
+.venv/
+.module-cache/
+.test-work/
+build/
+__pycache__/
+*.pyc
+*.basswork/
+tests/native-fixtures/
+tests/numba-cache/
+tests/runtime-benchmark/
+native-tests
+*.log
+.DS_Store
