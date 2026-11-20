@@ -20,6 +20,15 @@ __pycache__/
 htmlcov/
 *.egg-info/
 
+# Generated test reports, local databases, and one-off scratch tests
+coverage/
+test-results/
+*.db
+*.sqlite
+*.sqlite3
+test_tmp.py
+scratch.js
+
 # Swift / Xcode and local build/test output
 .build/
 .swiftpm/
@@ -70,3 +79,14 @@ native-tests
 
 # Optional local model runtimes and weights (installed separately)
 .local-models/
+
+# private documents
+docs/documents/
+
+# Local design drafts, source snapshots and shortcuts
+/generated_images/
+/SOURCE_MANIFEST.json
+*.webloc
+*.xcresult/
+*.sqlite-wal
+*.sqlite-shm

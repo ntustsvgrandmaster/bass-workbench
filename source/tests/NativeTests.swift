@@ -178,7 +178,7 @@ import Foundation
     let beforeScore = try Files.hash(scoreURL)
     try Files.directory(destination)
     var p = Project()
-    p.title = "合成音訊 · 首輪驗證"
+    p.title = "Synthetic score · import verification"
     p.score = try ScoreIO.importDocument(scoreURL, project: destination)
     p.selectedStaff = p.score!.staves.first(where: { !$0.isTAB })!.id
     p.timing.bpm = p.score?.bpm ?? 100
