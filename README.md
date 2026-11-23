@@ -32,3 +32,7 @@
 ## 開始使用
 
 [Quick Start](docs/quick-start.md)
+
+## Demo 素材
+
+[Mint Groove 原創示範素材](demo/mint-groove/README.md)：16 小節完整混音、Bass／和聲／鼓 stem，以及對應的五線譜＋五弦 TAB MusicXML。附授權與生成程式，可公開散布；下載專案後即可依說明匯入試用。

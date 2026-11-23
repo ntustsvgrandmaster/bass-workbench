@@ -90,3 +90,10 @@ docs/documents/
 *.xcresult/
 *.sqlite-wal
 *.sqlite-shm
+
+# Original, generated public demo only; keep all other media ignored.
+!/demo/mint-groove/mix.wav
+!/demo/mint-groove/bass.wav
+!/demo/mint-groove/harmony.wav
+!/demo/mint-groove/drums.wav
+!/demo/mint-groove/bass.musicxml
