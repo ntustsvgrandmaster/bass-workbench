@@ -8,7 +8,8 @@
 - **自動分析** 匯入後自動偵測 BPM、首拍位置與和聲候選。 
 - **視覺音訊** 以 CQT 顯示各頻率能量，結合 pYIN 預測基頻，輔助分辨泛音與實際音高。 
 - **聽與練**　快速設定 A–B 循環和變速播放，抓準並練習難句。
-![demo](https://github.com/user-attachments/assets/c2fd1eb8-79e6-489b-9f03-0e3d11d4a114)
+![demo](<img width="1200" height="830" alt="ab_loop_demo" src="https://github.com/user-attachments/assets/5c6bddd0-b3d3-4343-b332-623dbb5b66c9" />
+)
 - **對照樂譜**　支援 `mscz` 與 `musicXML` 格式樂譜，與音訊對齊後逐段核對。
 - **分析和聲**　參考低音與和弦候選，分別編輯或鎖定首音、根音和和弦。
 
